@@ -2,15 +2,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-void print_world(bool **world, int l, int c) {
-    for(int i = 0; i < l; i++) {
-        for(int j = 0; j < c; j++) {
-            printf("%d ", world[i][j]);
-        }
-        printf("\n");
-    }
-}
-
 void check_neighbors(bool **world, bool **next_gen, int i, int j, int l, int c) {
     int num = 0;
 
@@ -30,7 +21,6 @@ void check_neighbors(bool **world, bool **next_gen, int i, int j, int l, int c) 
     }
 
     // Regras:
-
     if(world[i][j]) {
         next_gen[i][j] = num == 2 || num == 3;
     }
@@ -50,15 +40,10 @@ void conways_game_of_life(bool ***world, bool ***next_gen, int l, int c, int n_g
                 check_neighbors(*world, *next_gen, i, j, l, c);
             }
         }
-
         // Atualiza o mundo:
         temp = *world;
         *world = *next_gen;
         *next_gen = temp;
-        
-        printf("GEN = %d:\n", gen+1);
-        print_world(*world, l, c);
-        printf("============================================\n");
 
         gen++;
     } 
@@ -97,7 +82,6 @@ int main(int argc, char *argv[]) {
     }
 
     char *input_name = argv[1];
-
     FILE *input = fopen(input_name, "r");
 
     // Verifica se o arquivo de entrada foi aberto corretamente:
@@ -116,10 +100,6 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    printf("N_GEN = %d\n", n_gen);
-    printf("L = %d e C = %d\n", l, c);
-    printf("N = %d\n", n);
-
     bool **world = (bool**) malloc(l * sizeof(bool*));
     bool **next_gen = (bool**) malloc(l * sizeof(bool*));
 
@@ -131,10 +111,11 @@ int main(int argc, char *argv[]) {
 
     for(int i = 0; i < l; i++) {
         world[i] = (bool*) malloc(c * sizeof(bool));
+        next_gen[i] = (bool*) malloc(c * sizeof(bool));
    
         // Verifica se a memória foi alocada corretamente:
-        if(world[i] == NULL) {
-            for(int row = 0; row < l; row++) {
+        if(world[i] == NULL || next_gen[i] == NULL) {
+            for(int row = 0; row <= i; row++) {
                 free(world[row]);
                 free(next_gen[row]);
             }
@@ -142,24 +123,7 @@ int main(int argc, char *argv[]) {
             free(next_gen);
 
             printf("A memória não foi alocada corretamente!\n");
-            exit(1);
-        }
-
-        next_gen[i] = (bool*) malloc(c * sizeof(bool));
-        
-        // Verifica se a memória foi alocada corretamente:
-        if(next_gen[i] == NULL) {
-            for(int row = 0; row < l; row++) {
-                free(world[row]);
-                free(next_gen[row]);
-            }
-            free(world);
-            free(next_gen);
-
-            printf("A memória não foi alocada corretamente!\n");
-            exit(1);
-
-            printf("A memória não foi alocada corretamente!\n");
+            fclose(input);
             exit(1);
         }
     }
@@ -173,22 +137,15 @@ int main(int argc, char *argv[]) {
     }
 
     for(int i = 0; i < n; i++) {
-
         // Verifica se as coordenadas são válidas:
         if(fscanf(input, "%d %d", &x, &y) != 2 || x < 1 || x > l || y < 1 || y > c) {
             printf("Coordenadas inválidas!\n");
             fclose(input);
             exit(1);
         }
-        printf("(%d, %d)\n", x, y);
-        
         world[x-1][y-1] = true;
     }
     
-    printf("Mundo inicial:\n");
-    print_world(world, l, c);
-    printf("============================================\n");
-
     conways_game_of_life(&world, &next_gen, l, c, n_gen);
     print_output(n_gen, l, c, world);
 
