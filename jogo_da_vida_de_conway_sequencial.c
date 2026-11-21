@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     // Verifica se os argumentos são válidos:
     if(argc < 2) {
         printf("Argumentos inválidos!\n");
-        printf("Formato correto: ./jogo_da_vida_de_conway_sequencial.c <nome_do_arquivo_de_entrada>");
+        printf("Formato correto: ./jogo_da_vida_de_conway_sequencial <nome_do_arquivo_de_entrada>\n");
         exit(1);
     }
 

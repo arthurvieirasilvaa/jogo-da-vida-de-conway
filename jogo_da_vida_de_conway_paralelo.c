@@ -3,31 +3,29 @@
 #include <stdbool.h>
 #include <pthread.h>
 
-typedef struct SubDomain {
-    int start;
-    int end;
-}SubDomain;
-
 typedef struct ThreadArgs {
+    int id;
     int n_gen;
     int l;
     int c;
-    bool **world;
-    bool **next_gen;
-    SubDomain sub_domain;
+    bool ***world;
+    bool ***next_gen;
+    int start;
+    int end;
+    pthread_barrier_t *barrier;
 }ThreadArgs;
 
-void check_neighbors(bool **world, bool **next_gen, int i, int j, int l, int c) {
+void check_neighbors(ThreadArgs thread_args, int i, int j) {
     int num = 0;
-
+    
     // Verifica as vizinhas da célula atual:
     for(int row = i-1; row <= i+1; row++) {
         for(int column = j-1; column <= j+1; column++) {
             // Verifica se a coordenada está dentro do mundo:
-            if(row >= 0 && row <= l-1 && column >= 0 && column <= c-1) {
+            if(row >= 0 && row <= thread_args.l-1 && column >= 0 && column <= thread_args.c-1) {
                 // Verifica se a célula vizinha não é a célula atual:
                 if(row != i || column != j) {
-                    if(world[row][column]) {
+                    if((*thread_args.world)[row][column]) {
                         num++;
                     }
                 }
@@ -36,32 +34,41 @@ void check_neighbors(bool **world, bool **next_gen, int i, int j, int l, int c) 
     }
 
     // Regras:
-    if(world[i][j]) {
-        next_gen[i][j] = num == 2 || num == 3;
+    if((*thread_args.world)[i][j]) {
+        (*thread_args.next_gen)[i][j] = num == 2 || num == 3;
     }
 
     else {
-        next_gen[i][j] = num == 3;
+        (*thread_args.next_gen)[i][j] = num == 3;
     }
 }
 
-void *conways_game_of_life(ThreadArgs thread_args) {
+void *conways_game_of_life(void *args) {
+    ThreadArgs *thread_args = (ThreadArgs*) args;
     int gen = 0;
     bool **temp;
 
-    while (gen < thread_args.n_gen) {
-        for(int i = 0; i < thread_args.l; i++) {
-            for(int j = 0; j < thread_args.c; j++) {
-                check_neighbors(*thread_args.world, *thread_args.next_gen, i, j, thread_args.l, thread_args.c);
+    while (gen < thread_args->n_gen) {
+        for(int i = thread_args->start; i < thread_args->end; i++) {
+            for(int j = 0; j < thread_args->c; j++) {
+                check_neighbors(*thread_args, i, j);
             }
         }
-        // Atualiza o mundo:
-        temp = *thread_args.world;
-        *thread_args.world = *thread_args.next_gen;
-        *thread_args.next_gen = temp;
+        // Mecanismo de sincronização (barreiras):
+        pthread_barrier_wait(thread_args->barrier);
+
+        // Apenas a thread 0 atualiza o mundo:
+        if(thread_args->id == 0) {
+            temp = *thread_args->world;
+            *thread_args->world = *thread_args->next_gen;
+            *thread_args->next_gen = temp;
+        }
+
+        // Mecanismo de sincronização (barreiras):
+        pthread_barrier_wait(thread_args->barrier);
 
         gen++;
-    } 
+    }
 }
 
 void print_output(int n_gen, int l, int c, bool **world) {
@@ -92,11 +99,11 @@ int main(int argc, char *argv[]) {
     // Verifica se os argumentos são válidos:
     if(argc < 3) {
         printf("Argumentos inválidos!\n");
-        printf("Formato correto: ./jogo_da_vida_de_conway_sequencial.c NUM_THREADS <nome_do_arquivo_de_entrada>");
+        printf("Formato correto: ./jogo_da_vida_de_conway_sequencial num_threads <nome_do_arquivo_de_entrada>\n");
         exit(1);
     }
 
-    int num_threads = argv[1];
+    int num_threads = atoi(argv[1]);
     char *input_name = argv[2];
     FILE *input = fopen(input_name, "r");
 
@@ -165,6 +172,9 @@ int main(int argc, char *argv[]) {
     pthread_t threads[num_threads];
     ThreadArgs thread_args[num_threads];
 
+    pthread_barrier_t barrier;
+    pthread_barrier_init(&barrier, NULL, num_threads);
+    
     int rows_by_thread = l / num_threads; 
     int rows;
     int remainder = l % num_threads;
@@ -180,23 +190,30 @@ int main(int argc, char *argv[]) {
         }
 
         // Inicializando o struct com os argumentos das threads:
+        thread_args[i].id = i;
         thread_args[i].n_gen = n_gen;
         thread_args[i].l = l;
         thread_args[i].c = c;
-        thread_args[i].world = world;
-        thread_args[i].next_gen = next_gen;
-        thread_args[i].sub_domain.start = start;
-        thread_args[i].sub_domain.end = start + rows;
+        thread_args[i].world = &world;
+        thread_args[i].next_gen = &next_gen;
+        thread_args[i].start = start;
+        thread_args[i].end = start + rows;
+        thread_args[i].barrier = &barrier;
 
-        start = thread_args[i].sub_domain.end;
+        start = thread_args[i].end;
     }
 
     for(int i = 0; i < num_threads; i++) {
-        pthread_create(&threads[i], NULL, conways_game_of_life, (void *)thread_args);
+        pthread_create(&threads[i], NULL, conways_game_of_life, (void *)&thread_args[i]);
+    }
+
+    for(int i = 0; i < num_threads; i++) {
+        pthread_join(threads[i], NULL);
     }
 
     print_output(n_gen, l, c, world);
 
+    pthread_barrier_destroy(&barrier);
     for(int i = 0; i < l; i++) {
         free(world[i]);
         free(next_gen[i]);
