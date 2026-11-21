@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 
+// Struct utilizada como argumento para a função que as threads iniciam:
 typedef struct ThreadArgs {
     int id;
     int n_gen;
@@ -15,6 +16,20 @@ typedef struct ThreadArgs {
     pthread_barrier_t *barrier;
 }ThreadArgs;
 
+// Função utilizada para liberar a memória das matrizes alocada dinamicamente: 
+void free_matrix(bool **matrix, int l) {
+    // Verifica se a matriz foi alocada:
+    if(matrix == NULL) {
+        return;
+    }
+
+    for(int i = 0; i < l; i++) {
+        free(matrix[i]);
+    }
+    free(matrix);
+}
+
+// Função utilizada para verificar a vizinhança da célula atual:
 void check_neighbors(ThreadArgs thread_args, int i, int j) {
     int num = 0;
     
@@ -43,6 +58,7 @@ void check_neighbors(ThreadArgs thread_args, int i, int j) {
     }
 }
 
+// Função utilizada para simular o Jogo da Vida de Conway:
 void *conways_game_of_life(void *args) {
     ThreadArgs *thread_args = (ThreadArgs*) args;
     int gen = 0;
@@ -69,8 +85,11 @@ void *conways_game_of_life(void *args) {
 
         gen++;
     }
+
+    return NULL;
 }
 
+// Função utilizada para imprimir a saída:
 void print_output(int n_gen, int l, int c, bool **world) {
     printf("%d\n", n_gen);
     printf("%d %d\n", l, c);
@@ -138,14 +157,9 @@ int main(int argc, char *argv[]) {
    
         // Verifica se a memória foi alocada corretamente:
         if(world[i] == NULL || next_gen[i] == NULL) {
-            for(int row = 0; row <= i; row++) {
-                free(world[row]);
-                free(next_gen[row]);
-            }
-            free(world);
-            free(next_gen);
-
             printf("A memória não foi alocada corretamente!\n");
+            free_matrix(world, i+1);
+            free_matrix(next_gen, i+1);
             fclose(input);
             exit(1);
         }
@@ -154,7 +168,7 @@ int main(int argc, char *argv[]) {
     // Inicializando as matrizes com valores false:
     for(int i = 0; i < l; i++) {
         for(int j = 0; j < c; j++) {
-            world[i][j] = false;// Verifica se a memória foi alocada corretamente:
+            world[i][j] = false;
             next_gen[i][j] = false;
         }
     }
@@ -164,6 +178,8 @@ int main(int argc, char *argv[]) {
         if(fscanf(input, "%d %d", &x, &y) != 2 || x < 1 || x > l || y < 1 || y > c) {
             printf("Coordenadas inválidas!\n");
             fclose(input);
+            free_matrix(world, l);
+            free_matrix(next_gen, l);
             exit(1);
         }
         world[x-1][y-1] = true;
@@ -173,7 +189,15 @@ int main(int argc, char *argv[]) {
     ThreadArgs thread_args[num_threads];
 
     pthread_barrier_t barrier;
-    pthread_barrier_init(&barrier, NULL, num_threads);
+    
+    // Verifica se a barreira de sincronização foi inicializada corretamente:
+    if(pthread_barrier_init(&barrier, NULL, num_threads) != 0) {
+        printf("A barreira de sincronização não foi inicializada corretamente!\n");
+        fclose(input);
+        free_matrix(world, l);
+        free_matrix(next_gen, l);
+        exit(1);
+    }
     
     int rows_by_thread = l / num_threads; 
     int rows;
@@ -213,13 +237,17 @@ int main(int argc, char *argv[]) {
 
     print_output(n_gen, l, c, world);
 
-    pthread_barrier_destroy(&barrier);
-    for(int i = 0; i < l; i++) {
-        free(world[i]);
-        free(next_gen[i]);
+    // Verifica se a barreira de sincronização foi destruída corretamente: 
+    if(pthread_barrier_destroy(&barrier) != 0) {
+        printf("A barreira de sincronização não foi destruída corretamente!\n");
+        fclose(input);
+        free_matrix(world, l);
+        free_matrix(next_gen, l);
+        exit(1);
     }
-    free(world);
-    free(next_gen);
+
+    free_matrix(world, l);
+    free_matrix(next_gen, l);
 
     fclose(input);
 }
